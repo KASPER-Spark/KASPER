@@ -30,74 +30,53 @@
     font: 16px/1.4 system-ui, sans-serif;
     text-align: center;
     padding: 2rem;
+    white-space: pre-line;
   }
 </style>
 </head>
 <body>
-<div id="msg">Loading videos from ./dir/ …</div>
+<div id="msg">Click anywhere to start ▶</div>
 <video id="v" playsinline muted></video>
 
 <script>
-const DIR = "dir/";
+// Folder that holds the videos, relative to this HTML file.
+const DIR = "kasper-demo-videos/";
+
+// The video files, in the order they should play. Sorted alphabetically.
+const FILES = [
+  "kasper-demo-1-tour.webm",
+  "kasper-demo-2-who-pays.webm",
+  "kasper-demo-3-plain-to-ticket.webm",
+  "kasper-demo-4-any-repository.webm",
+  "kasper-demo-5-off-and-unsent.webm",
+  "kasper-demo-6-receipts.webm",
+].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+
 const video = document.getElementById("v");
 const msg = document.getElementById("msg");
-
-// Get the list of .mp4 files by fetching the directory index.
-async function listVideos() {
-  const res = await fetch(DIR);
-  if (!res.ok) throw new Error("Cannot read " + DIR + " (HTTP " + res.status + ")");
-  const html = await res.text();
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const files = new Set();
-  for (const a of doc.querySelectorAll("a[href]")) {
-    let href = a.getAttribute("href");
-    try { href = decodeURIComponent(href); } catch (_) {}
-    const name = href.split("/").pop();
-    if (/\.mp4$/i.test(name)) files.add(name);
-  }
-  return [...files].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-}
-
-let playlist = [];
 let idx = 0;
 
 function playCurrent() {
-  video.src = DIR + encodeURIComponent(playlist[idx]);
+  video.src = DIR + encodeURIComponent(FILES[idx]);
   video.play().catch(() => {});
 }
-
 function next() {
-  idx = (idx + 1) % playlist.length; // loop back to start
+  idx = (idx + 1) % FILES.length; // loop
   playCurrent();
 }
 
 video.addEventListener("ended", next);
-video.addEventListener("error", next); // skip broken files instead of stalling
+video.addEventListener("error", next); // skip anything that won't play
 
-// Go fullscreen on first user interaction (browsers require a gesture).
-function goFullscreen() {
+function start() {
+  msg.style.display = "none";
   const el = document.documentElement;
   (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
-  video.muted = false; // unmute once the user interacts
+  video.muted = false;
+  playCurrent();
 }
-document.addEventListener("click", goFullscreen, { once: true });
-document.addEventListener("keydown", goFullscreen, { once: true });
-
-(async () => {
-  try {
-    playlist = await listVideos();
-    if (!playlist.length) {
-      msg.textContent = "No .mp4 files found in ./dir/";
-      return;
-    }
-    msg.textContent = "Click anywhere to go fullscreen. Playing " + playlist.length + " video(s)…";
-    setTimeout(() => { msg.style.display = "none"; }, 2500);
-    playCurrent();
-  } catch (e) {
-    msg.textContent = e.message + "\n\nServe this folder with a static server, e.g.:  python3 -m http.server";
-    msg.style.whiteSpace = "pre-line";
-  }
-})();
+document.addEventListener("click", start, { once: true });
+document.addEventListener("keydown", start, { once: true });
 </script>
 </body>
 </html>
