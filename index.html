@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+  }
+  video {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+    background: #000;
+  }
+  #msg {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    font: 16px/1.4 system-ui, sans-serif;
+    text-align: center;
+    padding: 2rem;
+  }
+</style>
+</head>
+<body>
+<div id="msg">Loading videos from ./dir/ …</div>
+<video id="v" playsinline muted></video>
+
+<script>
+const DIR = "dir/";
+const video = document.getElementById("v");
+const msg = document.getElementById("msg");
+
+// Get the list of .mp4 files by fetching the directory index.
+async function listVideos() {
+  const res = await fetch(DIR);
+  if (!res.ok) throw new Error("Cannot read " + DIR + " (HTTP " + res.status + ")");
+  const html = await res.text();
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const files = new Set();
+  for (const a of doc.querySelectorAll("a[href]")) {
+    let href = a.getAttribute("href");
+    try { href = decodeURIComponent(href); } catch (_) {}
+    const name = href.split("/").pop();
+    if (/\.mp4$/i.test(name)) files.add(name);
+  }
+  return [...files].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+let playlist = [];
+let idx = 0;
+
+function playCurrent() {
+  video.src = DIR + encodeURIComponent(playlist[idx]);
+  video.play().catch(() => {});
+}
+
+function next() {
+  idx = (idx + 1) % playlist.length; // loop back to start
+  playCurrent();
+}
+
+video.addEventListener("ended", next);
+video.addEventListener("error", next); // skip broken files instead of stalling
+
+// Go fullscreen on first user interaction (browsers require a gesture).
+function goFullscreen() {
+  const el = document.documentElement;
+  (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
+  video.muted = false; // unmute once the user interacts
+}
+document.addEventListener("click", goFullscreen, { once: true });
+document.addEventListener("keydown", goFullscreen, { once: true });
+
+(async () => {
+  try {
+    playlist = await listVideos();
+    if (!playlist.length) {
+      msg.textContent = "No .mp4 files found in ./dir/";
+      return;
+    }
+    msg.textContent = "Click anywhere to go fullscreen. Playing " + playlist.length + " video(s)…";
+    setTimeout(() => { msg.style.display = "none"; }, 2500);
+    playCurrent();
+  } catch (e) {
+    msg.textContent = e.message + "\n\nServe this folder with a static server, e.g.:  python3 -m http.server";
+    msg.style.whiteSpace = "pre-line";
+  }
+})();
+</script>
+</body>
+</html>
